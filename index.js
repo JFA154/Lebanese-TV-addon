@@ -1,13 +1,12 @@
 // Lebanese TV — Stremio Add-on
 // Run: node index.js
 // 
-// ** REQUIRES: npm install axios crypto-js stremio-addon-sdk **
+// ** REQUIRES: npm install axios crypto-js cheerio stremio-addon-sdk **
 //
 
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const axios = require('axios');
 const CryptoJS = require('crypto-js');
-// Import cheerio for efficient HTML parsing
 const cheerio = require('cheerio'); 
 
 // --- CONSTANTS ---
@@ -20,13 +19,6 @@ const ORIGIN = "https://elahmad.com";
 
 const fetch = (...args) => import("node-fetch").then(m => m.default(...args));
 
-/**
- * Replicates the AES decryption logic (my_crypt_new).
- * @param {string} encryptedLink Base64 encrypted stream link.
- * @param {string} keyHex AES key in Hex.
- * @param {string} ivHex AES IV in Hex.
- * @returns {string} The decrypted, clean stream URL.
- */
 function decryptStream(encryptedLink, keyHex, ivHex) {
     const e = CryptoJS.enc.Base64.parse(encryptedLink);
     const d = CryptoJS.enc.Hex.parse(keyHex);
@@ -38,15 +30,9 @@ function decryptStream(encryptedLink, keyHex, ivHex) {
         padding: CryptoJS.pad.Pkcs7
     });
     
-    let decrypted = a.toString(CryptoJS.enc.Utf8) || '';
-    
-    // Decrypted string might contain the full URL with token query
-    return decrypted;
+    return a.toString(CryptoJS.enc.Utf8) || '';
 }
 
-/**
- * Probes the stream URL to find the H.264/AAC variant.
- */
 async function fetchFreshPlaylist(seedUrl) {
     const isElAhmad = /elahmad\.(xyz|com)/i.test(seedUrl);
     const headers = {
@@ -90,21 +76,22 @@ async function fetchFreshPlaylist(seedUrl) {
 }
 
 /**
- * NEW HELPER: Scrapes the page for the necessary CSRF token.
+ * FIX: Scrapes the page for the necessary CSRF token using enhanced headers.
  * @param {string} pageUrl The page to scrape.
+ * @param {object} requiredHeaders The set of security headers to spoof the browser.
  * @returns {Promise<string>} The csrf-token string.
  */
-async function getCsrfToken(pageUrl) {
+async function getCsrfToken(pageUrl, requiredHeaders) {
+    // Crucially, pass the Referer/Origin in the GET request headers
     const pageRes = await axios.get(pageUrl, {
-        headers: { "User-Agent": USER_AGENT }
+        headers: requiredHeaders
     });
+    
     const $ = cheerio.load(pageRes.data);
     const token = $('meta[name="csrf-token"]').attr('content');
-    if (!token) {
-        // If no token is found, return an empty string/null. The server may accept null.
-        return ''; 
-    }
-    return token;
+    
+    // If no token is found, return an empty string. The original JS used a null/empty token if not found.
+    return token || ''; 
 }
 
 
@@ -127,7 +114,7 @@ const CHANNELS = [
     id: "iptv_aljadeed_lebanon",
     name: "Al Jadeed",
     streamID: "aljadeed", 
-    playerPageUrl: "https://www.elahmad.com/tv/watchtv.php?id=aljadeed", // Assumed page structure
+    playerPageUrl: "https://www.elahmad.com/tv/watchtv.php?id=aljadeed", 
   	logo: "http://picons.cmshulk.com/picons/207201.png",
   },
 ];
@@ -135,7 +122,7 @@ const CHANNELS = [
 // --- MANIFEST (Bumped version) ---
 const manifest = {
     id: "org.joe.lebanese.tv",
-    version: "1.2.2", 
+    version: "1.2.3", 
     name: "Lebanese TV",
     description: "Live Lebanese channels (LBCI, MTV Lebanon, Al Jadeed).",
     resources: ["catalog", "meta", "stream"],
@@ -196,6 +183,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
 
     let masterPlaylistUrl;
     
+    // Full set of headers for all requests
     const requiredHeaders = {
         "User-Agent": USER_AGENT,
         "Referer": SCRAPE_REFERER,
@@ -205,9 +193,9 @@ builder.defineStreamHandler(async ({ type, id }) => {
     // --- DECRYPTION HEIST LOGIC with CSRF FIX ---
     if (ch.streamID) {
         try {
-            // STEP 1: Scrape the CSRF token from the player page
+            // STEP 1: Scrape the CSRF token with full headers
             console.log(`Scraping CSRF token from: ${ch.playerPageUrl}`);
-            const csrfToken = await getCsrfToken(ch.playerPageUrl);
+            const csrfToken = await getCsrfToken(ch.playerPageUrl, requiredHeaders);
             console.log(`Found CSRF Token: ${csrfToken ? 'YES' : 'NO'}`);
             
             // STEP 2: Request the encrypted payload with the token

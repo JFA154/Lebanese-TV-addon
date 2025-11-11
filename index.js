@@ -22,7 +22,7 @@ const CHANNELS = [
     id: "iptv_sky_sports_me",
     name: "Sky Sports Main Event",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/1608071",
-    logo: "http://103.176.90.95/images/1608071.png",
+    logo: "http://103.176.90.95/images/1458658.png",
     category: "sports",
   },
 ];
@@ -39,13 +39,13 @@ const manifest = {
     {
       type: "tv",
       id: "lebanese_tv_catalog",
-      name: "Lebanese TV",
+      name: "Lebanon",
       extra: [{ name: "search", isRequired: false }],
     },
     {
       type: "tv",
       id: "sports_tv_catalog",
-      name: "Sports TV",
+      name: "Sports",
       extra: [{ name: "search", isRequired: false }],
     },
   ],

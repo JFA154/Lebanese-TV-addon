@@ -1,4 +1,4 @@
-// Lebanese tv — Stremio Add-on
+// Lebanese TV — Stremio Add-on
 // Run: node index.js
 
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
@@ -22,16 +22,17 @@ const CHANNELS = [
     id: "iptv_sky_sports_me",
     name: "Sky Sports Main Event",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/1608071",
-    logo: "http://103.176.90.92/images/30496.png",
+    logo: "http://103.176.90.95/images/1608071.png",
     category: "sports",
   },
 ];
 
+// ---------- Manifest ----------
 const manifest = {
   id: "org.joe.lebanese.tv",
-  version: "1.1.0",
-  name: "Lebanese tv",
-  description: "Lebanese TV and Sports channels.",
+  version: "1.2.0",
+  name: "Lebanese & Sports TV",
+  description: "Live Lebanese and Sports channels.",
   resources: ["catalog", "meta", "stream"],
   types: ["tv"],
   catalogs: [
@@ -53,45 +54,40 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// Helper to map channels → metas
-function toMeta(ch) {
-  return {
+// ---------- Catalog Handler ----------
+builder.defineCatalogHandler(({ type, id, extra }) => {
+  if (type !== "tv") return Promise.resolve({ metas: [] });
+
+  const q = (extra?.search || "").toLowerCase();
+  let filtered = [];
+
+  if (id === "lebanese_tv_catalog") {
+    filtered = CHANNELS.filter(ch => ch.category === "lebanese");
+  } else if (id === "sports_tv_catalog") {
+    filtered = CHANNELS.filter(ch => ch.category === "sports");
+  }
+
+  if (q) {
+    filtered = filtered.filter(
+      ch =>
+        ch.name.toLowerCase().includes(q) ||
+        ch.id.toLowerCase().includes(q)
+    );
+  }
+
+  const metas = filtered.map(ch => ({
     id: ch.id,
     type: "tv",
     name: ch.name,
     poster: ch.logo,
     posterShape: "landscape",
     description: `${ch.name} live stream`,
-    // Optional: expose category as a genre
-    genres: [ch.category === "lebanese" ? "Lebanese TV" : "Sports"],
-  };
-}
+  }));
 
-// Catalogs
-builder.defineCatalogHandler(({ type, id, extra }) => {
-  if (type !== "tv") return Promise.resolve({ metas: [] });
-
-  const q = (extra?.search || "").toLowerCase();
-
-  let subset = [];
-  if (id === "lebanese_tv_catalog") {
-    subset = CHANNELS.filter(c => c.category === "lebanese");
-  } else if (id === "sports_tv_catalog") {
-    subset = CHANNELS.filter(c => c.category === "sports");
-  } else {
-    subset = []; // unknown catalog
-  }
-
-  if (q) {
-    subset = subset.filter(
-      c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)
-    );
-  }
-
-  return Promise.resolve({ metas: subset.map(toMeta) });
+  return Promise.resolve({ metas });
 });
 
-// Meta
+// ---------- Meta Handler ----------
 builder.defineMetaHandler(({ type, id }) => {
   if (type !== "tv") return Promise.resolve({ meta: {} });
   const ch = CHANNELS.find(c => c.id === id);
@@ -105,12 +101,11 @@ builder.defineMetaHandler(({ type, id }) => {
       poster: ch.logo,
       background: ch.logo,
       description: `${ch.name} live broadcast.`,
-      genres: [ch.category === "lebanese" ? "Lebanese TV" : "Sports"],
     },
   });
 });
 
-// Streams
+// ---------- Stream Handler ----------
 builder.defineStreamHandler(({ type, id }) => {
   if (type !== "tv") return Promise.resolve({ streams: [] });
   const ch = CHANNELS.find(c => c.id === id);
@@ -127,6 +122,6 @@ builder.defineStreamHandler(({ type, id }) => {
   });
 });
 
-// Start server (Render-friendly if you deploy later)
+// ---------- Start Server ----------
 serveHTTP(builder.getInterface(), { port: process.env.PORT || 7000 });
-console.log("Lebanese tv add-on running at: http://127.0.0.1:7000/manifest.json");
+console.log("Lebanese & Sports TV add-on running at: http://127.0.0.1:7000/manifest.json");

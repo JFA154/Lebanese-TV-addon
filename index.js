@@ -21,7 +21,7 @@ const CHANNELS = [
 const manifest = {
   id: "org.joe.lebanese.tv",
   version: "1.0.0",
-  name: "Lebanese tv",
+  name: "Lebanese TV",
   description: "Watch live Lebanese channels (LBCI, MTV Lebanon) via IPTV.",
   resources: ["catalog", "meta", "stream"],
   types: ["tv"],
@@ -29,7 +29,7 @@ const manifest = {
     {
       type: "tv",
       id: "lebanese_tv_catalog",
-      name: "Lebanese tv",
+      name: "Lebanese TV",
       extra: [{ name: "search", isRequired: false }],
     },
   ],
@@ -95,5 +95,5 @@ builder.defineStreamHandler(({ type, id }) => {
   });
 });
 
-serveHTTP(builder.getInterface(), { port: 7000 });
+serveHTTP(builder.getInterface(), { port: process.env.PORT || 7000 });
 console.log("Lebanese tv add-on running at: http://127.0.0.1:7000/manifest.json");

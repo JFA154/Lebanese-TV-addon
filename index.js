@@ -22,7 +22,14 @@ const CHANNELS = [
     id: "iptv_sky_sports_me",
     name: "Sky Sports Main Event",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/1608071",
-    logo: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/83/13/db/8313dbed-1929-a962-c434-44fed5a68125/GB-AppIcon-0-1x_U007emarketing-0-8-85-220-0.png/400x400ia-75.webp",
+    logo: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Sky-sports-main-event.jpg",
+    category: "sports",
+  },
+  {
+    id: "iptv_sky_sports_pl",
+    name: "Sky Sports Premier League",
+    url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/1458669",
+    logo: "https://static.skyassets.com/contentstack/assets/blt143e20b03d72047e/blt04215f1234c090d0/673cb481bd749a19c4f12807/Sky_Sports_Premier_League_ICON_SQUARE_Full_Bleed_RGB.png",
     category: "sports",
   },
 ];

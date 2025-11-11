@@ -68,7 +68,7 @@ const CHANNELS = [
   {
     id: "iptv_lbci",
     name: "LBCI",
-    playerPage: "https://elahmad.com/", // We scrape this page
+    playerPage: "https://www.elahmad.com/tv/watchtv.php?id=lbc", // We scrape this page
     streamKey: "tv764_www.elahmad.com_lbc", // To find a link containing this
     logo: "http://picons.cmshulk.com/picons/151656.png",
   },

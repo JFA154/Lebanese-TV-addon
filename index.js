@@ -16,6 +16,12 @@ const CHANNELS = [
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151658",
     logo: "http://picons.cmshulk.com/picons/151658.png",
   },
+  {
+    id: "iptv_sky_sports_me",
+    name: "Sky Sports Main Event",
+    url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/1608071",
+    logo: "http://103.176.90.95/images/1608071.png",
+  },
 ];
 
 const manifest = {

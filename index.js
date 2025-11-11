@@ -8,14 +8,14 @@ const CHANNELS = [
     id: "iptv_lbci",
     name: "LBCI",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151656",
-    logo: "http://picons.cmshulk.com/picons/151656.png",
+    logo: "https://www.lbcgroup.tv/images/LBCI-Logo02.png",
     category: "lebanese",
   },
   {
     id: "iptv_mtv_lebanon",
     name: "MTV Lebanon",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151658",
-    logo: "http://picons.cmshulk.com/picons/151658.png",
+    logo: "https://www.mtv.com.lb/images/header/mtv-logo.svg",
     category: "lebanese",
   },
   {

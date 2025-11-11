@@ -7,6 +7,8 @@
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const axios = require('axios');
 const CryptoJS = require('crypto-js');
+// Import cheerio for efficient HTML parsing
+const cheerio = require('cheerio'); 
 
 // --- CONSTANTS ---
 const SCRAPE_REFERER = "https://www.elahmad.com/";
@@ -16,7 +18,6 @@ const ORIGIN = "https://elahmad.com";
 
 // --- HELPERS ---
 
-// Lightweight fetch for commonjs (used in fetchFreshPlaylist)
 const fetch = (...args) => import("node-fetch").then(m => m.default(...args));
 
 /**
@@ -39,20 +40,12 @@ function decryptStream(encryptedLink, keyHex, ivHex) {
     
     let decrypted = a.toString(CryptoJS.enc.Utf8) || '';
     
-    // The decrypted string may contain the URL plus a token query at the end. We only need the URL.
-    const urlEnd = decrypted.indexOf('?');
-    if (urlEnd !== -1) {
-        // We keep the query here because it's part of the necessary stream link
-        decrypted = decrypted.substring(0, urlEnd);
-    }
-    
+    // Decrypted string might contain the full URL with token query
     return decrypted;
 }
 
 /**
- * Probes the stream URL to find the H.264/AAC variant for better mobile/device compatibility.
- * @param {string} seedUrl The master m3u8 playlist URL.
- * @returns {Promise<string>} The best variant URL or the original URL.
+ * Probes the stream URL to find the H.264/AAC variant.
  */
 async function fetchFreshPlaylist(seedUrl) {
     const isElAhmad = /elahmad\.(xyz|com)/i.test(seedUrl);
@@ -74,8 +67,8 @@ async function fetchFreshPlaylist(seedUrl) {
                 if (next && /\.m3u8(\?|$)/i.test(next)) {
                     const abs = new URL(next, url).toString();
                     const isH264 = /CODECS="[^"]*avc1[^"]*mp4a\.40\.2/i.test(lines[i]);
-                    if (isH264) return abs; // take H.264 immediately
-                    if (!best) best = abs;  // remember first variant as fallback
+                    if (isH264) return abs; 
+                    if (!best) best = abs; 
                 }
             }
         }
@@ -96,12 +89,32 @@ async function fetchFreshPlaylist(seedUrl) {
     return seedUrl;
 }
 
-// --- CHANNELS (Using streamID for elahmad channels) ---
+/**
+ * NEW HELPER: Scrapes the page for the necessary CSRF token.
+ * @param {string} pageUrl The page to scrape.
+ * @returns {Promise<string>} The csrf-token string.
+ */
+async function getCsrfToken(pageUrl) {
+    const pageRes = await axios.get(pageUrl, {
+        headers: { "User-Agent": USER_AGENT }
+    });
+    const $ = cheerio.load(pageRes.data);
+    const token = $('meta[name="csrf-token"]').attr('content');
+    if (!token) {
+        // If no token is found, return an empty string/null. The server may accept null.
+        return ''; 
+    }
+    return token;
+}
+
+
+// --- CHANNELS (Updated to include player page for scraping) ---
 const CHANNELS = [
   {
     id: "iptv_lbci",
     name: "LBCI",
     streamID: "lbc", 
+    playerPageUrl: "https://www.elahmad.com/tv/watchtv.php?id=lbc",
   	logo: "http://picons.cmshulk.com/picons/151656.png",
   },
   {
@@ -114,6 +127,7 @@ const CHANNELS = [
     id: "iptv_aljadeed_lebanon",
     name: "Al Jadeed",
     streamID: "aljadeed", 
+    playerPageUrl: "https://www.elahmad.com/tv/watchtv.php?id=aljadeed", // Assumed page structure
   	logo: "http://picons.cmshulk.com/picons/207201.png",
   },
 ];
@@ -121,7 +135,7 @@ const CHANNELS = [
 // --- MANIFEST (Bumped version) ---
 const manifest = {
     id: "org.joe.lebanese.tv",
-    version: "1.2.1", 
+    version: "1.2.2", 
     name: "Lebanese TV",
     description: "Live Lebanese channels (LBCI, MTV Lebanon, Al Jadeed).",
     resources: ["catalog", "meta", "stream"],
@@ -174,7 +188,7 @@ builder.defineMetaHandler(({ type, id }) => {
   });
 });
 
-// --- STREAM HANDLER (Decryption Heist Logic with 403 Fix) ---
+// --- STREAM HANDLER (CSRF Token and Decryption Logic) ---
 builder.defineStreamHandler(async ({ type, id }) => {
     if (type !== "tv") return { streams: [] };
     const ch = CHANNELS.find((c) => c.id === id);
@@ -182,21 +196,28 @@ builder.defineStreamHandler(async ({ type, id }) => {
 
     let masterPlaylistUrl;
     
-    // Headers needed for both the POST request and the final stream access
     const requiredHeaders = {
         "User-Agent": USER_AGENT,
         "Referer": SCRAPE_REFERER,
         "Origin": ORIGIN,
     };
 
-    // --- DECRYPTION HEIST LOGIC with 403 FIX ---
+    // --- DECRYPTION HEIST LOGIC with CSRF FIX ---
     if (ch.streamID) {
-        console.log(`Requesting encrypted payload for stream ID: ${ch.streamID}`);
         try {
+            // STEP 1: Scrape the CSRF token from the player page
+            console.log(`Scraping CSRF token from: ${ch.playerPageUrl}`);
+            const csrfToken = await getCsrfToken(ch.playerPageUrl);
+            console.log(`Found CSRF Token: ${csrfToken ? 'YES' : 'NO'}`);
+            
+            // STEP 2: Request the encrypted payload with the token
+            console.log(`Requesting encrypted payload for stream ID: ${ch.streamID}`);
+            
+            const postBody = `id=${encodeURIComponent(ch.streamID)}&csrf_token=${encodeURIComponent(csrfToken)}`;
+
             const response = await axios.post(
                 EMBED_RESULT_URL, 
-                // The POST body must be application/x-www-form-urlencoded
-                `id=${encodeURIComponent(ch.streamID)}`, 
+                postBody, 
                 {
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",
@@ -214,6 +235,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
             }
 
             if (data.link_4 && data.key && data.iv) {
+                // STEP 3: Decrypt
                 masterPlaylistUrl = decryptStream(data.link_4, data.key, data.iv);
                 console.log(`Decrypted fresh link: ${masterPlaylistUrl}`);
             } else {
@@ -221,7 +243,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
             }
 
         } catch (err) {
-            console.error(`Decryption failed for ${ch.name} (Check headers/endpoint):`, err.message);
+            console.error(`Decryption failed for ${ch.name}:`, err.message);
             return { streams: [] };
         }
     } else {
@@ -238,7 +260,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
     // Get the mobile-friendly variant URL
     const freshUrl = await fetchFreshPlaylist(masterPlaylistUrl);
 
-    // Proxy headers for the final stream request, only Referer is critical
+    // Proxy headers for the final stream request
     const proxyHeaders = {
         "User-Agent": requiredHeaders["User-Agent"],
     };

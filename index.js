@@ -8,21 +8,21 @@ const CHANNELS = [
     id: "iptv_lbci",
     name: "LBCI",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151656",
-    logo: "https://www.lbcgroup.tv/images/LBCI-Logo02.png",
+    logo: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/8d/cc/de/8dccdec8-2ca8-36be-64f4-aed295cb3294/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/400x400ia-75.webp",
     category: "lebanese",
   },
   {
     id: "iptv_mtv_lebanon",
     name: "MTV Lebanon",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151658",
-    logo: "https://www.mtv.com.lb/images/header/mtv-logo.svg",
+    logo: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/66/eb/89/66eb89db-96d2-8dd0-9adf-1d1c4aca6025/AppIcon-0-0-1x_U007epad-0-1-0-0-85-220.png/400x400ia-75.webp",
     category: "lebanese",
   },
   {
     id: "iptv_sky_sports_me",
     name: "Sky Sports Main Event",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/1608071",
-    logo: "https://afcdonscast.co.uk/wp-content/uploads/2022/07/sky-sports-main-event-1.webp",
+    logo: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/83/13/db/8313dbed-1929-a962-c434-44fed5a68125/GB-AppIcon-0-1x_U007emarketing-0-8-85-220-0.png/400x400ia-75.webp",
     category: "sports",
   },
 ];
@@ -80,7 +80,7 @@ builder.defineCatalogHandler(({ type, id, extra }) => {
     type: "tv",
     name: ch.name,
     poster: ch.logo,
-    posterShape: "landscape",
+    posterShape: "square",
     description: `${ch.name} live stream`,
   }));
 

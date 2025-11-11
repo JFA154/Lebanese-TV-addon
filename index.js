@@ -22,7 +22,7 @@ const CHANNELS = [
     id: "iptv_sky_sports_me",
     name: "Sky Sports Main Event",
     url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/1608071",
-    logo: "http://103.176.90.95/images/1458658.png",
+    logo: "https://afcdonscast.co.uk/wp-content/uploads/2022/07/sky-sports-main-event-1.webp",
     category: "sports",
   },
 ];

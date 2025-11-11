@@ -7,7 +7,7 @@ const CHANNELS = [
   {
     id: "iptv_lbci",
     name: "LBCI",
-    url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151656",
+    url: "http://hi-ott.me/live/c0dc5bf9f8ff/a69fdf8293/161006.m3u8",
     logo: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/8d/cc/de/8dccdec8-2ca8-36be-64f4-aed295cb3294/AppIcon-0-0-1x_U007emarketing-0-11-0-85-220.png/400x400ia-75.webp",
     category: "lebanese",
   },

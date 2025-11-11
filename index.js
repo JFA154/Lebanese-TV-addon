@@ -1,19 +1,36 @@
 // Lebanese TV — Stremio Add-on
 // Run: node index.js
 // 
-// ** REQUIRES: npm install axios crypto-js cheerio stremio-addon-sdk **
+// ** REQUIRES: npm install http-cookie-agent cheerio axios crypto-js stremio-addon-sdk **
 //
 
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const axios = require('axios');
 const CryptoJS = require('crypto-js');
 const cheerio = require('cheerio'); 
+const { CookieJar } = require('tough-cookie');
+const { HttpsCookieAgent } = require('http-cookie-agent/http'); // Use HttpsCookieAgent for HTTPS sites
 
 // --- CONSTANTS ---
 const SCRAPE_REFERER = "https://www.elahmad.com/";
 const EMBED_RESULT_URL = "https://www.elahmad.com/tv/result/embed_result.php";
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
 const ORIGIN = "https://elahmad.com";
+
+// --- CUSTOM AXIOS INSTANCE FOR COOKIE PERSISTENCE ---
+const cookieJar = new CookieJar();
+const axiosCookieInstance = axios.create({
+    // Set headers globally for all requests made by this instance
+    headers: {
+        "User-Agent": USER_AGENT,
+        "Referer": SCRAPE_REFERER,
+        "Origin": ORIGIN,
+    },
+    // Use the cookie agent to manage and persist cookies across requests
+    httpsAgent: new HttpsCookieAgent({ cookies: { jar: cookieJar } }),
+    // Important: axios must follow redirects for the initial GET request
+    maxRedirects: 5, 
+});
 
 // --- HELPERS ---
 
@@ -76,21 +93,18 @@ async function fetchFreshPlaylist(seedUrl) {
 }
 
 /**
- * FIX: Scrapes the page for the necessary CSRF token using enhanced headers.
+ * FIX: Scrapes the page for the necessary CSRF token using the Cookie-aware Axios instance.
  * @param {string} pageUrl The page to scrape.
- * @param {object} requiredHeaders The set of security headers to spoof the browser.
  * @returns {Promise<string>} The csrf-token string.
  */
-async function getCsrfToken(pageUrl, requiredHeaders) {
-    // Crucially, pass the Referer/Origin in the GET request headers
-    const pageRes = await axios.get(pageUrl, {
-        headers: requiredHeaders
-    });
+async function getCsrfToken(pageUrl) {
+    // Use the custom instance here to handle cookies and redirects
+    const pageRes = await axiosCookieInstance.get(pageUrl);
     
     const $ = cheerio.load(pageRes.data);
     const token = $('meta[name="csrf-token"]').attr('content');
     
-    // If no token is found, return an empty string. The original JS used a null/empty token if not found.
+    // Return the token or an empty string
     return token || ''; 
 }
 
@@ -122,7 +136,7 @@ const CHANNELS = [
 // --- MANIFEST (Bumped version) ---
 const manifest = {
     id: "org.joe.lebanese.tv",
-    version: "1.2.3", 
+    version: "1.2.4", 
     name: "Lebanese TV",
     description: "Live Lebanese channels (LBCI, MTV Lebanon, Al Jadeed).",
     resources: ["catalog", "meta", "stream"],
@@ -183,35 +197,33 @@ builder.defineStreamHandler(async ({ type, id }) => {
 
     let masterPlaylistUrl;
     
-    // Full set of headers for all requests
+    // Headers are defined on the axios instance now, but we'll re-define for clarity and proxy headers
     const requiredHeaders = {
         "User-Agent": USER_AGENT,
         "Referer": SCRAPE_REFERER,
         "Origin": ORIGIN,
     };
 
-    // --- DECRYPTION HEIST LOGIC with CSRF FIX ---
+    // --- DECRYPTION HEIST LOGIC with COOKIE FIX ---
     if (ch.streamID) {
         try {
-            // STEP 1: Scrape the CSRF token with full headers
+            // STEP 1: Scrape the CSRF token. The cookie is now saved automatically.
             console.log(`Scraping CSRF token from: ${ch.playerPageUrl}`);
-            const csrfToken = await getCsrfToken(ch.playerPageUrl, requiredHeaders);
+            const csrfToken = await getCsrfToken(ch.playerPageUrl);
             console.log(`Found CSRF Token: ${csrfToken ? 'YES' : 'NO'}`);
             
-            // STEP 2: Request the encrypted payload with the token
+            // STEP 2: Request the encrypted payload with the token and persisted cookies
             console.log(`Requesting encrypted payload for stream ID: ${ch.streamID}`);
             
             const postBody = `id=${encodeURIComponent(ch.streamID)}&csrf_token=${encodeURIComponent(csrfToken)}`;
 
-            const response = await axios.post(
+            const response = await axiosCookieInstance.post(
                 EMBED_RESULT_URL, 
                 postBody, 
                 {
+                    // Only need to explicitly set Content-Type here, other headers are on the instance
                     headers: {
                         "Content-Type": "application/x-www-form-urlencoded",
-                        "User-Agent": requiredHeaders["User-Agent"],
-                        "Referer": requiredHeaders.Referer,
-                        "Origin": requiredHeaders.Origin, 
                     }
                 }
             );
@@ -231,7 +243,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
             }
 
         } catch (err) {
-            console.error(`Decryption failed for ${ch.name}:`, err.message);
+            console.error(`Decryption failed for ${ch.name}. Final attempt, likely a strict IP block or JavaScript challenge:`, err.message);
             return { streams: [] };
         }
     } else {

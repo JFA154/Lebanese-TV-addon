@@ -1,4 +1,4 @@
-// Lebanese tv — Stremio Add-on
+// Lebanese TV — Stremio Add-on
 // Run: node index.js
 
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
@@ -26,9 +26,9 @@ const CHANNELS = [
 
 const manifest = {
   id: "org.joe.lebanese.tv",
-  version: "1.0.0",
+  version: "1.0.1",
   name: "Lebanese TV",
-  description: "Watch live Lebanese channels (LBCI, MTV Lebanon) via IPTV.",
+  description: "Live Lebanese channels (LBCI, MTV Lebanon, Al Jadeed).",
   resources: ["catalog", "meta", "stream"],
   types: ["tv"],
   catalogs: [
@@ -44,32 +44,28 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-/** Catalog: show all channels */
+/** Catalog: list channels (with optional search) */
 builder.defineCatalogHandler(({ type, id, extra }) => {
   if (type !== "tv" || id !== "lebanese_tv_catalog") return Promise.resolve({ metas: [] });
 
-  const search = extra?.search?.toLowerCase() || "";
-  const filtered = CHANNELS.filter(
-    ch =>
-      !search ||
-      ch.name.toLowerCase().includes(search) ||
-      ch.id.toLowerCase().includes(search)
-  );
-
-  const metas = filtered.map(ch => ({
-    id: ch.id,
-    type: "tv",
-    name: ch.name,
-    poster: ch.logo,
-    posterShape: "landscape",
-    description: `${ch.name} live stream`,
-  }));
+  const q = (extra?.search || "").toLowerCase();
+  const metas = CHANNELS
+    .filter(ch => !q || ch.name.toLowerCase().includes(q) || ch.id.toLowerCase().includes(q))
+    .map(ch => ({
+      id: ch.id,
+      type: "tv",
+      name: ch.name,
+      poster: ch.logo,
+      posterShape: "landscape",
+      description: `${ch.name} live stream`,
+    }));
 
   return Promise.resolve({ metas });
 });
 
-/** Meta: channel info */
+/** Meta: single channel info */
 builder.defineMetaHandler(({ type, id }) => {
+  if (type !== "tv") return Promise.resolve({ meta: {} });
   const ch = CHANNELS.find(c => c.id === id);
   if (!ch) return Promise.resolve({ meta: {} });
 
@@ -85,16 +81,31 @@ builder.defineMetaHandler(({ type, id }) => {
   });
 });
 
-/** Stream: return playable link */
+/** Stream: return playable stream with desktop headers & proxy */
 builder.defineStreamHandler(({ type, id }) => {
+  if (type !== "tv") return Promise.resolve({ streams: [] });
   const ch = CHANNELS.find(c => c.id === id);
   if (!ch) return Promise.resolve({ streams: [] });
+
+  // Default desktop-like headers
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  };
+
+  // Some hosts (elahmad) require Referer/Origin
+  if (/elahmad\.xyz|elahmad\.com/i.test(ch.url)) {
+    headers["Referer"] = "https://elahmad.com/";
+    headers["Origin"] = "https://elahmad.com";
+  }
 
   return Promise.resolve({
     streams: [
       {
         url: ch.url,
-        title: ch.name,
+        title: `${ch.name} (mobile-safe)`,
+        // Force Stremio to fetch via its HTTPS proxy and apply headers
+        proxyHeaders: headers,
         behaviorHints: { notWebReady: false },
       },
     ],
@@ -102,4 +113,4 @@ builder.defineStreamHandler(({ type, id }) => {
 });
 
 serveHTTP(builder.getInterface(), { port: process.env.PORT || 7000 });
-console.log("Lebanese tv add-on running at: http://127.0.0.1:7000/manifest.json");
+console.log("Lebanese TV add-on running at: http://127.0.0.1:7000/manifest.json");

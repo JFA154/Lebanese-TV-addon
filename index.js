@@ -1,10 +1,47 @@
 // Lebanese TV — Stremio Add-on
 // Run: node index.js
+// 
+// ** REQUIRES: npm install axios crypto-js stremio-addon-sdk **
+//
 
 const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
+const axios = require('axios');
+const CryptoJS = require('crypto-js');
 
 // --- helper: lightweight fetch (works with commonjs) ---
 const fetch = (...args) => import("node-fetch").then(m => m.default(...args));
+
+// --- CONSTANTS from the original player script ---
+const EMBED_RESULT_URL = "https://www.elahmad.com/tv/result/embed_result.php"; // This endpoint is assumed based on the original script logic
+const SCRAPE_REFERER = "https://www.elahmad.com/";
+
+/**
+ * Replicates the AES decryption logic from the original JavaScript player (my_crypt_new).
+ * Note: The easybroadcast.io logic is removed as Stremio/addon client handles the final URL.
+ */
+function decryptStream(encryptedLink, keyHex, ivHex) {
+    const e = CryptoJS.enc.Base64.parse(encryptedLink);
+    const d = CryptoJS.enc.Hex.parse(keyHex);
+    const c = CryptoJS.enc.Hex.parse(ivHex);
+    
+    // Decrypt using AES, CBC mode, Pkcs7 padding
+    const a = CryptoJS.AES.decrypt({ ciphertext: e }, d, {
+        iv: c,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+    });
+    
+    let decrypted = a.toString(CryptoJS.enc.Utf8) || '';
+    
+    // The decrypted string may contain the URL plus a token query at the end. We only need the URL.
+    const urlEnd = decrypted.indexOf('?');
+    if (urlEnd !== -1) {
+        decrypted = decrypted.substring(0, urlEnd);
+    }
+    
+    return decrypted;
+}
+
 
 /**
 Panel generation and content logic for the Stremio add-on
@@ -18,7 +55,7 @@ async function fetchFreshPlaylist(seedUrl) {
   const headers = {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    ...(isElAhmad && { Referer: "https://elahmad.com/", Origin: "https://elahmad.com" }),
+    ...(isElAhmad && { Referer: SCRAPE_REFERER, Origin: "https://elahmad.com" }),
   };
 
   // Try a URL and, if it looks like a master playlist, pick an H.264 variant
@@ -65,50 +102,48 @@ async function fetchFreshPlaylist(seedUrl) {
 
 // --- your channels ---
 const CHANNELS = [
-  {
-    id: "iptv_lbci",
-    name: "LBCI",
-    playerPage: "https://www.elahmad.com/tv/watchtv.php?id=lbc", // We scrape this page
-    streamKey: "tv764_www.elahmad.com_lbc", // To find a link containing this
-    logo: "http://picons.cmshulk.com/picons/151656.png",
-  },
-  {
-    id: "iptv_mtv_lebanon",
-    name: "MTV Lebanon",
-    url: "https://shls-live-enc.edgenextcdn.net/out/v1/45ad6fbe1f7149ad9f05f8aefc38f6c0/index_8.m3u8", // This one is direct, no scraping needed
-    logo: "http://picons.cmshulk.com/picons/151658.png",
-  },
-  {
-    id: "iptv_aljadeed_lebanon",
-    name: "Al Jadeed",
-    playerPage: "https://elahmad.com/", // We scrape this page
-    streamKey: "tv764_www.elahmad.com_aljadeed", // To find a link containing this
-    logo: "http://picons.cmshulk.com/picons/207201.png",
-  },
+  {
+    id: "iptv_lbci",
+    name: "LBCI",
+    streamID: "lbc", // Changed playerPage/streamKey to a single ID for the POST request
+    logo: "http://picons.cmshulk.com/picons/151656.png",
+  },
+  {
+    id: "iptv_mtv_lebanon",
+    name: "MTV Lebanon",
+    url: "https://shls-live-enc.edgenextcdn.net/out/v1/45ad6fbe1f7149ad9f05f8aefc38f6c0/index_8.m3u8", // This one is direct, no scraping needed
+    logo: "http://picons.cmshulk.com/picons/151658.png",
+  },
+  {
+    id: "iptv_aljadeed_lebanon",
+    name: "Al Jadeed",
+    streamID: "aljadeed", // Changed playerPage/streamKey to a single ID for the POST request
+    logo: "http://picons.cmshulk.com/picons/207201.png",
+  },
 ];
 
 // --- manifest ---
 const manifest = {
-  id: "org.joe.lebanese.tv",
-  version: "1.1.0",
-  name: "Lebanese TV",
-  description: "Live Lebanese channels (LBCI, MTV Lebanon, Al Jadeed).",
-  resources: ["catalog", "meta", "stream"],
-  types: ["tv"],
-  catalogs: [
-    {
-      type: "tv",
-      id: "lebanese_tv_catalog",
-      name: "Lebanese TV",
-      extra: [{ name: "search", isRequired: false }],
-    },
-  ],
-  idPrefixes: ["iptv_"],
+    id: "org.joe.lebanese.tv",
+    version: "1.2.0", // Bumped version
+    name: "Lebanese TV",
+    description: "Live Lebanese channels (LBCI, MTV Lebanon, Al Jadeed).",
+    resources: ["catalog", "meta", "stream"],
+    types: ["tv"],
+    catalogs: [
+        {
+            type: "tv",
+            id: "lebanese_tv_catalog",
+            name: "Lebanese TV",
+            extra: [{ name: "search", isRequired: false }],
+        },
+    ],
+    idPrefixes: ["iptv_"],
 };
 
 const builder = new addonBuilder(manifest);
 
-// --- catalog handler ---
+// --- catalog handler (no change) ---
 builder.defineCatalogHandler(({ type, id, extra }) => {
   if (type !== "tv" || id !== "lebanese_tv_catalog") return Promise.resolve({ metas: [] });
   const q = (extra?.search || "").toLowerCase();
@@ -126,7 +161,7 @@ builder.defineCatalogHandler(({ type, id, extra }) => {
   return Promise.resolve({ metas });
 });
 
-// --- meta handler ---
+// --- meta handler (no change) ---
 builder.defineMetaHandler(({ type, id }) => {
   if (type !== "tv") return Promise.resolve({ meta: {} });
   const ch = CHANNELS.find((c) => c.id === id);
@@ -144,84 +179,94 @@ builder.defineMetaHandler(({ type, id }) => {
   });
 });
 
-// --- stream handler (auto-fresh + mobile-safe headers) ---
+// --- stream handler (Decryption Heist Logic) ---
 builder.defineStreamHandler(async ({ type, id }) => {
-  if (type !== "tv") return { streams: [] };
-  const ch = CHANNELS.find((c) => c.id === id);
-  if (!ch) return { streams: [] };
+  if (type !== "tv") return { streams: [] };
+  const ch = CHANNELS.find((c) => c.id === id);
+  if (!ch) return { streams: [] };
 
-  let masterPlaylistUrl;
+  let masterPlaylistUrl;
 
-  // These are the headers we need to pretend to be a browser
-  const scrapeHeaders = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    Referer: "https://elahmad.com/",
-    Origin: "https://elahmad.com",
-  };
+  // These are the headers we need to pretend to be a browser
+  const streamHeaders = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    Referer: SCRAPE_REFERER,
+    Origin: "https://elahmad.com",
+  };
 
-  // --- THIS IS THE NEW HEIST LOGIC ---
-  if (ch.streamKey) {
-    // This is an elahmad channel, we must scrape
-    console.log(`Scraping ${ch.playerPage} for stream key: ${ch.streamKey}`);
-    try {
-      const pageRes = await fetch(ch.playerPage, { headers: scrapeHeaders });
-      if (!pageRes.ok) throw new Error(`Scraper failed to fetch page: ${pageRes.status}`);
+  // --- DECRYPTION HEIST LOGIC ---
+  if (ch.streamID) {
+    // Step 1: Request the encrypted link, key, and IV from the API endpoint
+    console.log(`Requesting encrypted payload for stream ID: ${ch.streamID}`);
+    try {
+        // We MUST use the id/streamKey from the URL, which is handled by streamID
+        const response = await axios.post(
+            EMBED_RESULT_URL, 
+            `id=${encodeURIComponent(ch.streamID)}`, 
+            {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    ...streamHeaders // Send headers with the POST request
+                }
+            }
+        );
 
-      const pageText = await pageRes.text();
+        const data = response.data;
 
-      // This regex is our lockpick. It looks for the full m3u8 link containing the streamKey
-// This regex is our lockpick. It looks for the full m3u8 link containing the streamKey
-      const regex = new RegExp(
-        '(https?:\\/\\/games\\d+\\.elahmad\\.xyz\\/' + ch.streamKey + '\\/[^\\\'"\\s]+\\.m3u8\\?token=[a-f0-9\\-]+)',
-        "i",
-      );
-      const match = pageText.match(regex);
+        if (data.error) {
+          throw new Error(`API Error: ${data.error}`);
+        }
 
-      if (match && match[1]) {
-        masterPlaylistUrl = match[1];
-        console.log(`FUCK YEAH. Found fresh link: ${masterPlaylistUrl}`);
-      } else {
-        throw new Error(`Could not find stream link in page source for ${ch.name}`);
-      }
-    } catch (err) {
-      console.error(`Goddammit, scraping failed for ${ch.name}:`, err.message);
-      return { streams: [] }; // Give up, we failed
-    }
-  } else {
-    // This is a direct link (like MTV), no scraping needed
-    masterPlaylistUrl = ch.url;
-  }
-  // --- END OF HEIST LOGIC ---
+        if (data.link_4 && data.key && data.iv) {
+          // Step 2: Decrypt the link
+          masterPlaylistUrl = decryptStream(data.link_4, data.key, data.iv);
+          console.log(`FUCK YEAH. Decrypted fresh link: ${masterPlaylistUrl}`);
+        } else {
+          throw new Error("Missing required decryption components (link_4, key, or iv)");
+        }
 
-  if (!masterPlaylistUrl) {
-    console.error(`Shit, no masterPlaylistUrl for ${ch.name}. Bailing.`);
-    return { streams: [] };
-  }
+    } catch (err) {
+      console.error(`Goddammit, decryption failed for ${ch.name}:`, err.message);
+      return { streams: [] }; // Give up, we failed
+    }
+  } else {
+    // This is a direct link (like MTV), no decryption needed
+    masterPlaylistUrl = ch.url;
+  }
+  // --- END OF DECRYPTION HEIST LOGIC ---
 
-  // Now we feed our stolen (or direct) link to your smart playlist parser
-  const freshUrl = await fetchFreshPlaylist(masterPlaylistUrl);
+  if (!masterPlaylistUrl) {
+    console.error(`Shit, no masterPlaylistUrl for ${ch.name}. Bailing.`);
+    return { streams: [] };
+  }
 
-  // Check if the fresh URL is from elahmad to add proxy headers
-  const isElAhmad = /elahmad\.(xyz|com)/i.test(freshUrl);
-  const streamHeaders = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    ...(isElAhmad && { Referer: "https://elahmad.com/", Origin: "https://elahmad.com" }),
-  };
+  // Now we feed our decrypted (or direct) link to your smart playlist parser
+  const freshUrl = await fetchFreshPlaylist(masterPlaylistUrl);
 
-  return {
-    streams: [
-      {
-        url: freshUrl,
-        title: ch.name + " (auto-fresh)",
-        // proxyHeaders is CORRECT. This tells Stremio's server to use these headers
-        // when *it* fetches the playlist, which is exactly what elahmad wants.
-        proxyHeaders: { "User-Agent": streamHeaders["User-Agent"], "Referer": streamHeaders["Referer"] },
-        behaviorHints: { notWebReady: false },
-      },
-    ],
-  };
+  // Check if the fresh URL is from elahmad to add proxy headers
+  const isElAhmad = /elahmad\.(xyz|com)/i.test(freshUrl);
+  
+  // Define the final headers for Stremio to proxy
+  const proxyHeaders = {
+    "User-Agent": streamHeaders["User-Agent"],
+  };
+  
+  if (isElAhmad) {
+    proxyHeaders.Referer = streamHeaders.Referer;
+  }
+
+  return {
+    streams: [
+      {
+        url: freshUrl,
+        title: ch.name + " (auto-fresh)",
+        // proxyHeaders is CORRECT. This tells Stremio's server to use these headers
+        proxyHeaders: proxyHeaders,
+        behaviorHints: { notWebReady: false },
+      },
+    ],
+  };
 });
 
 // --- start server (Render-friendly) ---

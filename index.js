@@ -7,14 +7,20 @@ const CHANNELS = [
   {
     id: "iptv_lbci",
     name: "LBCI",
-    url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151656",
+    url: "https://games1.elahmad.xyz/tv764_www.elahmad.com_lbc/tracks-v1a1/mono.m3u8?token=766dc34755a4638d6c710ae5715390340bdbe9a2-224fced2d510148838fc9e3c2b6b7acb-1762877321-1762866521",
     logo: "http://picons.cmshulk.com/picons/151656.png",
   },
   {
     id: "iptv_mtv_lebanon",
     name: "MTV Lebanon",
-    url: "http://line.trx-ott.com:80/7df41d9cb2/f9e841f009ea/151658",
+    url: "https://shls-live-enc.edgenextcdn.net/out/v1/45ad6fbe1f7149ad9f05f8aefc38f6c0/index_8.m3u8",
     logo: "http://picons.cmshulk.com/picons/151658.png",
+  },
+  {
+    id: "iptv_aljadeed_lebanon",
+    name: "Al Jadeed",
+    url: "https://games1.elahmad.xyz/tv764_www.elahmad.com_aljadeed/tracks-v1a1/mono.m3u8?token=7304c9345b635e496122812d34f1a9939a419755-0cfc93ffd0c4549f290cf1bb0837195d-1762877039-1762866239",
+    logo: "http://picons.cmshulk.com/picons/207201.png",
   },
 ];
 

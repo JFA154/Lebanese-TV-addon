@@ -58,18 +58,21 @@ builder.defineCatalogHandler(({ type, id, extra }) => {
   if (type !== "tv") return Promise.resolve({ metas: [] });
 
   const q = (extra?.search || "").toLowerCase();
-
   let subset = [];
+
   if (id === "lebanese_tv_catalog") {
     subset = CHANNELS.filter(c => c.category === "lebanese");
   } else if (id === "sports_tv_catalog") {
-    // Require genre=Sports to match the manifest; this keeps it off Home
-    if (extra?.genre !== "Sports") return Promise.resolve({ metas: [] });
-    subset = CHANNELS.filter(c => c.category === "sports");
+    // Catalog has a required extra, so Home won't show it.
+    // In Discover, if user hasn't picked a value yet, default to showing Sports.
+    const wantsSports = !extra?.genre || extra.genre === "Sports";
+    subset = wantsSports ? CHANNELS.filter(c => c.category === "sports") : [];
   }
 
   if (q) {
-    subset = subset.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+    subset = subset.filter(c =>
+      c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)
+    );
   }
 
   const metas = subset.map(ch => ({
@@ -83,6 +86,7 @@ builder.defineCatalogHandler(({ type, id, extra }) => {
 
   return Promise.resolve({ metas });
 });
+
 
 // ---------- Meta ----------
 builder.defineMetaHandler(({ type, id }) => {
